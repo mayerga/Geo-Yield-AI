@@ -1,0 +1,41 @@
+name: Deploy Model
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_version:
+        description: 'Version of the API to deploy'
+        required: true
+        default: 'latest'
+      model_release:
+        description: 'Version of the model to deploy'
+        required: true
+        default: 'latest'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all tags and history
+      
+      - name: Deploy to Render
+        env:
+          MODEL_RELEASE: ${{ inputs.model_release }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          latest=$(git tag | sort -r | head -n1)
+          if [[ "${{ inputs.api_version }}" != "latest" ]]; then
+            git checkout ${{ inputs.api_version }}
+          else
+            git checkout $latest
+          fi
+          #echo "se estaría haciendo el curl con el modelo ${MODEL_RELEASE} y ls version ${GITHUB_REF}"
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
