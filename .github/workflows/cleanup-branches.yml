@@ -1,0 +1,39 @@
+name: Automated Branch Cleanup
+
+# 1. Identificador del evento disparador
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    # 2. Seguridad y Permisos
+    permissions:
+      contents: write
+
+    # 3. Filtros y Condiciones
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Delete merged branch
+        env: 
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Se guarda el nombre de la rama origen que hay que borrar
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+
+        run: |
+          echo "Analizando la rama: $BRANCH_NAME"
+
+          if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "develop" ]; then
+            echo "Acción cancelada. No se permite eliminar ramas protegidas."
+            exit 0
+          fi
+
+          # Se ejecuta el borrado en el remoto usando la CLI de GitHub
+          echo "Eliminando la rama remota $BRANCH_NAME..."
+          gh api -X DELETE /repos/${{ github.repository }}/git/refs/heads/$BRANCH_NAME
