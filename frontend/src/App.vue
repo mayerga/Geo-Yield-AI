@@ -1,200 +1,116 @@
-<template>
-  <div id="app">
-    <!-- Header minimalista -->
-    <header class="header">
-      <div class="logo">
-        <div class="logo-icon">🛰️</div>
-        <h1>Geo-Yield AI</h1>
-      </div>
-      <div class="user-info">
-        <!-- TODO: Implementar autenticación de usuario -->
-        <span class="status-badge">Manuel</span>
-      </div>
-    </header>
+<script setup>
+import { computed, ref } from 'vue'
+import FormularioViabilidad from './components/FormularioViabilidad.vue'
+import TarjetaVeredicto from './components/TarjetaVeredicto.vue'
+import BurbujaChat from './components/BurbujaChat.vue'
+import MapaDistrito from './components/MapaDistrito.vue'
+import { generarInformeStream } from './services/api.js'
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Sección de Chat -->
-      <section class="chat-section">
-        <ChatInterface 
-          @location-selected="handleLocationSelected"
-          @query-submit="handleQuerySubmit"
-        />
-      </section>
+const SEMAFOROS_VALIDOS = ['verde', 'ambar', 'rojo']
 
-      <!-- Sección de Mapa -->
-      <section class="map-section">
-        <MapComponent 
-          :selected-location="selectedLocation"
-          :heatmap-data="heatmapData"
-          @marker-click="handleMarkerClick"
-        />
-      </section>
-    </main>
-  </div>
-</template>
+const cargando = ref(false)
+const error = ref(null)
+const codiDistrictePedido = ref(null)
 
-<script>
-import ChatInterface from './components/ChatInterface.vue'
-import MapComponent from './components/MapComponent.vue'
+const datosDistrito = ref(null)
+const respuestaLegal = ref('')
+const articulosCitados = ref([])
+const textoSintesis = ref('')
 
-export default {
-  name: 'App',
-  components: {
-    ChatInterface,
-    MapComponent
-  },
-  data() {
-    return {
-      selectedLocation: null,
-      heatmapData: [],
-      // TODO: Configurar WebSocket para actualizaciones en tiempo real
-      wsConnection: null
-    }
-  },
-  methods: {
-    handleLocationSelected(location) {
-      this.selectedLocation = location
-      // TODO: Llamar al backend para obtener análisis de la ubicación
-      // this.fetchLocationAnalysis(location)
-    },
-    
-    async handleQuerySubmit(query) {
-      // TODO: Implementar llamada a la API del backend
-      // const response = await fetch('http://localhost:8000/recommend', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ query })
-      // })
-      console.log('Query enviada:', query)
-    },
+// El semáforo es la primera línea del texto de síntesis -- se detecta en
+// cuanto el streaming acumula un salto de línea, sin esperar a que
+// termine el resumen completo. Así la tarjeta de veredicto aparece en
+// cuanto se conoce el dato más importante, no al final de todo.
+const semaforo = computed(() => {
+  const primeraLinea = textoSintesis.value.split('\n')[0]?.trim().toLowerCase()
+  return SEMAFOROS_VALIDOS.includes(primeraLinea) ? primeraLinea : null
+})
 
-    handleMarkerClick(marker) {
-      // TODO: Mostrar detalles del negocio/competidor seleccionado
-      console.log('Marker clicked:', marker)
-    }
+const resumen = computed(() => {
+  if (!semaforo.value) return ''
+  return textoSintesis.value.split('\n').slice(1).join('\n').trim()
+})
 
-    // TODO: Implementar método fetchLocationAnalysis
-    // TODO: Implementar conexión WebSocket para actualizaciones en tiempo real
-    // TODO: Agregar manejo de errores y loading states
-  },
-  mounted() {
-    // TODO: Inicializar conexión WebSocket
-    // TODO: Cargar datos iniciales del mapa
+async function onGenerar({ codiDistricte, zonaPgm }) {
+  cargando.value = true
+  error.value = null
+  codiDistrictePedido.value = codiDistricte
+  datosDistrito.value = null
+  respuestaLegal.value = ''
+  articulosCitados.value = []
+  textoSintesis.value = ''
+
+  try {
+    await generarInformeStream(codiDistricte, zonaPgm, {
+      onDatos: (evento) => {
+        datosDistrito.value = evento.datos_distrito
+        respuestaLegal.value = evento.respuesta_legal
+        articulosCitados.value = evento.articulos_citados
+        cargando.value = false // ya hay algo que mostrar, aunque el veredicto siga en camino
+      },
+      onToken: (texto) => {
+        textoSintesis.value += texto
+      },
+      onError: (detail) => {
+        error.value = detail
+      },
+    })
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    cargando.value = false
   }
 }
 </script>
 
-<style>
-/* Variables de color basadas en la imagen */
-:root {
-  --color-bg-primary: #F5F1EB;
-  --color-bg-secondary: #EBE5DD;
-  --color-text-primary: #1A1A1A;
-  --color-text-secondary: #6B6B6B;
-  --color-accent: #E07A5F;
-  --color-accent-hover: #D46A50;
-  --color-border: #DCD5CD;
-  --color-white: #FFFFFF;
-  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.08);
-  --shadow-medium: 0 8px 30px rgba(0, 0, 0, 0.12);
-}
+<template>
+  <div class="fondo-plano min-h-screen">
+    <div class="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+      <header class="mb-10">
+        <p class="mb-2 font-mono text-xs tracking-[0.2em] text-brass uppercase">Geo-Yield-AI</p>
+        <h1 class="font-display text-3xl font-semibold text-paper sm:text-4xl">
+          Dossier de viabilidad de hostelería
+        </h1>
+        <p class="mt-2 max-w-xl text-sm text-paper/60">
+          Selecciona un distrito y una zona urbanística de Barcelona para generar un informe
+          que cruza normativa legal vigente con datos socioeconómicos reales.
+        </p>
+      </header>
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+      <div class="mb-8 rounded-lg border border-paper/15 bg-ink-light/40 p-6">
+        <FormularioViabilidad :cargando="cargando" @generar="onGenerar" />
+      </div>
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: var(--color-bg-primary);
-  background-image: 
-    linear-gradient(var(--color-bg-secondary) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-bg-secondary) 1px, transparent 1px);
-  background-size: 20px 20px;
-  color: var(--color-text-primary);
-  line-height: 1.6;
-}
+      <div v-if="error" class="mb-8 rounded border border-rojo/40 bg-rojo/10 px-4 py-3 text-sm text-paper">
+        {{ error }}
+      </div>
 
-#app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+      <div v-if="cargando" class="flex items-center gap-3 text-sm text-paper/50">
+        <span class="h-2 w-2 animate-ping rounded-full bg-brass" />
+        Consultando normativa y datos del distrito…
+      </div>
 
-/* Header */
-.header {
-  background: var(--color-white);
-  border-bottom: 1px solid var(--color-border);
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: var(--shadow-soft);
-}
+      <div v-if="datosDistrito || respuestaLegal" class="space-y-5">
+        <TarjetaVeredicto
+          v-if="semaforo"
+          :informe="{ semaforo, resumen, datos_distrito: datosDistrito || {} }"
+        />
+        <div v-else class="flex items-center gap-3 rounded-lg border border-paper/15 bg-paper px-6 py-5 text-sm text-ink/60">
+          <span class="h-2 w-2 animate-ping rounded-full bg-brass" />
+          Generando el veredicto…
+        </div>
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
+        <MapaDistrito
+          v-if="datosDistrito"
+          :codi-districte="codiDistrictePedido"
+          :nom-districte="datosDistrito.nom_districte"
+        />
 
-.logo-icon {
-  font-size: 1.5rem;
-}
-
-.logo h1 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.status-badge {
-  background: var(--color-accent);
-  color: var(--color-white);
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
-/* Main Content */
-.main-content {
-  flex: 1;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.chat-section {
-  background: var(--color-white);
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: var(--shadow-soft);
-}
-
-.map-section {
-  background: var(--color-white);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: var(--shadow-medium);
-  min-height: 500px;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .main-content {
-    grid-template-rows: auto auto;
-    padding: 1rem;
-  }
-  
-  .header {
-    padding: 1rem;
-  }
-}
-</style>
+        <BurbujaChat
+          v-if="respuestaLegal"
+          :informe="{ respuesta_legal: respuestaLegal, articulos_citados: articulosCitados }"
+        />
+      </div>
+    </div>
+  </div>
+</template>
