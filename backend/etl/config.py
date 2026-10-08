@@ -32,7 +32,8 @@ PROCESSED_DATA_DIR = REPO_ROOT / "data" / "processed"
 # update, they can just drop the file into the folder without remembering to
 # rename it manually, preventing pipeline crashes.
 PATH_CENSCOMER = RAW_DATA_DIR / "241021_censcomercialbcn_opendata_2024_v5.csv"
-PATH_INE_RENTA = RAW_DATA_DIR / "30896.csv"
+# PATH_INE_RENTA = RAW_DATA_DIR / "30896.csv"
+PATH_INE_RENTA = RAW_DATA_DIR / "renta_media_por_distrito.csv"
 
 # Note on GZIP: The MITMA dataset is massive, so they distribute it compressed (.csv.gz).
 # Pandas' read_csv detects the compression automatically by the file extension.
